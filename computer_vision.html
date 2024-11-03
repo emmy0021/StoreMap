@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Store Layout Mapper</title>
+    <style>
+        canvas {
+            border: 1px solid black;
+            margin-top: 10px;
+            position: relative;
+        }
+    </style>
+</head>
+<body>
+
+<h1>Store Layout Mapper</h1>
+<input type="file" id="imageUpload" accept="image/*">
+<label for="threshold">Adjust Threshold:</label>
+<input type="range" id="threshold" min="50" max="200" value="150">
+<canvas id="canvas" width="640" height="480"></canvas>
+
+<!-- OpenCV.js library -->
+<script src="https://docs.opencv.org/4.x/opencv.js" type="text/javascript"></script>
+<script>
+    const canvas = document.getElementById('canvas');
+    const context = canvas.getContext('2d');
+    const imageUpload = document.getElementById('imageUpload');
+    const thresholdInput = document.getElementById('threshold');
+
+    let srcImage;  // Store the uploaded image for reprocessing
+    let detectedBoxes = []; // Store detected boxes
+    let selectedBox = null; // Currently selected box for resizing
+    let dragCorner = null;  // Active corner being dragged
+
+    imageUpload.addEventListener('change', (event) => {
+        const file = event.target.files[0];
+        if (file) {
+            const img = new Image();
+            img.onload = () => {
+                canvas.width = img.width;
+                canvas.height = img.height;
+                context.drawImage(img, 0, 0, img.width, img.height);
+                
+                srcImage = cv.imread(canvas);
+                detectShapes();
+            };
+            img.src = URL.createObjectURL(file);
+        }
+    });
+
+    thresholdInput.addEventListener('input', detectShapes);
+
+    function detectShapes() {
+        if (!srcImage) return;
+
+        const src = srcImage.clone();
+        const gray = new cv.Mat();
+        const edges = new cv.Mat();
+
+        cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
+
+        const thresholdValue = parseInt(thresholdInput.value, 10);
+        cv.Canny(gray, edges, thresholdValue, thresholdValue * 2);
+
+        const contours = new cv.MatVector();
+        const hierarchy = new cv.Mat();
+        cv.findContours(edges, contours, hierarchy, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
+
+        context.clearRect(0, 0, canvas.width, canvas.height);
+        cv.imshow(canvas, srcImage);
+        detectedBoxes = [];
+
+        for (let i = 0; i < contours.size(); i++) {
+            const contour = contours.get(i);
+            const area = cv.contourArea(contour);
+
+            if (area > 500) {
+                const approx = new cv.Mat();
+                cv.approxPolyDP(contour, approx, 0.02 * cv.arcLength(contour, true), true);
+
+                if (approx.rows === 4) {
+                    const rect = cv.boundingRect(approx);
+                    detectedBoxes.push({ x: rect.x, y: rect.y, width: rect.width, height: rect.height });
+                    context.strokeStyle = 'red';
+                    context.lineWidth = 2;
+                    context.strokeRect(rect.x, rect.y, rect.width, rect.height);
+                }
+                approx.delete();
+            }
+        }
+
+        src.delete(); gray.delete(); edges.delete(); contours.delete(); hierarchy.delete();
+    }
+
+    function drawBoxes() {
+        context.clearRect(0, 0, canvas.width, canvas.height);
+        cv.imshow(canvas, srcImage);
+
+        detectedBoxes.forEach(box => {
+            context.strokeStyle = 'blue';
+            context.lineWidth = 2;
+            context.strokeRect(box.x, box.y, box.width, box.height);
+
+            // Draw resize handles at corners
+            const size = 8;
+            context.fillStyle = 'red';
+            context.fillRect(box.x - size / 2, box.y - size / 2, size, size); // top-left
+            context.fillRect(box.x + box.width - size / 2, box.y - size / 2, size, size); // top-right
+            context.fillRect(box.x - size / 2, box.y + box.height - size / 2, size, size); // bottom-left
+            context.fillRect(box.x + box.width - size / 2, box.y + box.height - size / 2, size, size); // bottom-right
+        });
+    }
+
+    canvas.addEventListener('mousedown', (event) => {
+        const { offsetX: x, offsetY: y } = event;
+
+        selectedBox = null;
+        dragCorner = null;
+
+        // Check if the user clicked on a resize handle
+        for (const box of detectedBoxes) {
+            const corners = [
+                { x: box.x, y: box.y, corner: 'top-left' },
+                { x: box.x + box.width, y: box.y, corner: 'top-right' },
+                { x: box.x, y: box.y + box.height, corner: 'bottom-left' },
+                { x: box.x + box.width, y: box.y + box.height, corner: 'bottom-right' }
+            ];
+
+            for (const corner of corners) {
+                if (Math.abs(corner.x - x) < 8 && Math.abs(corner.y - y) < 8) {
+                    selectedBox = box;
+                    dragCorner = corner.corner;
+                    return;
+                }
+            }
+        }
+
+        // Check if the user clicked inside a box to select it
+        if (!selectedBox) {
+            for (const box of detectedBoxes) {
+                if (x >= box.x && x <= box.x + box.width && y >= box.y && y <= box.y + box.height) {
+                    selectedBox = box;
+                    break;
+                }
+            }
+        }
+    });
+
+    canvas.addEventListener('mousemove', (event) => {
+        if (!selectedBox || !dragCorner) return;
+
+        const { offsetX: x, offsetY: y } = event;
+
+        // Resize the box based on which corner is being dragged
+        if (dragCorner === 'top-left') {
+            selectedBox.width += selectedBox.x - x;
+            selectedBox.height += selectedBox.y - y;
+            selectedBox.x = x;
+            selectedBox.y = y;
+        } else if (dragCorner === 'top-right') {
+            selectedBox.width = x - selectedBox.x;
+            selectedBox.height += selectedBox.y - y;
+            selectedBox.y = y;
+        } else if (dragCorner === 'bottom-left') {
+            selectedBox.width += selectedBox.x - x;
+            selectedBox.x = x;
+            selectedBox.height = y - selectedBox.y;
+        } else if (dragCorner === 'bottom-right') {
+            selectedBox.width = x - selectedBox.x;
+            selectedBox.height = y - selectedBox.y;
+        }
+
+        drawBoxes();
+    });
+
+    canvas.addEventListener('mouseup', () => {
+        selectedBox = null;
+        dragCorner = null;
+    });
+</script>
+
+</body>
+</html>
