@@ -14,7 +14,7 @@
             position: absolute;
             display: none;
             border: 1px solid #ccc;
-            padding: boxLabel;
+            padding: 2px;
             background: white;
             font-size: 12px;
             z-index: 1;
@@ -27,6 +27,8 @@
 <input type="file" id="imageUpload" accept="image/*">
 <label for="threshold">Adjust Threshold:</label>
 <input type="range" id="threshold" min="50" max="200" value="150">
+<label for="toggleImage">Show Image</label>
+<input type="checkbox" id="toggleImage" checked>
 <canvas id="canvas" width="640" height="480"></canvas>
 <input type="text" id="boxLabel" class="box-label" placeholder="Enter shelf name">
 
@@ -38,6 +40,7 @@
     const imageUpload = document.getElementById('imageUpload');
     const thresholdInput = document.getElementById('threshold');
     const boxLabelInput = document.getElementById('boxLabel');
+    const toggleImageCheckbox = document.getElementById('toggleImage');
 
     let srcImage;
     let detectedBoxes = [];
@@ -61,6 +64,7 @@
     });
 
     thresholdInput.addEventListener('input', detectShapes);
+    toggleImageCheckbox.addEventListener('change', drawBoxes);
 
     function detectShapes() {
         if (!srcImage) return;
@@ -107,7 +111,11 @@
 
     function drawBoxes() {
         context.clearRect(0, 0, canvas.width, canvas.height);
-        cv.imshow(canvas, srcImage);
+
+        // Only show the image if the checkbox is checked
+        if (toggleImageCheckbox.checked && srcImage) {
+            cv.imshow(canvas, srcImage);
+        }
 
         detectedBoxes.forEach(box => {
             context.strokeStyle = (box === activeBox) ? 'green' : 'blue';
@@ -156,7 +164,7 @@
             activeBox = clickedBox;
             dragCorner = getCornerUnderCursor(x, y, activeBox);
 
-            // Display text input for editing the label in editor mode
+            // Display text input for editing the label in editor mode with offset
             boxLabelInput.style.left = `${activeBox.x + canvas.offsetLeft + 4}px`;
             boxLabelInput.style.top = `${activeBox.y + canvas.offsetTop + 4}px`;
             boxLabelInput.style.width = `${activeBox.width - 10}px`;
@@ -196,7 +204,7 @@
             activeBox.height = y - activeBox.y;
         }
 
-        // Update the text box position to follow the top-left corner
+        // Update the text box position to follow the top-left corner with offset
         boxLabelInput.style.left = `${activeBox.x + canvas.offsetLeft + 4}px`;
         boxLabelInput.style.top = `${activeBox.y + canvas.offsetTop + 4}px`;
 
