@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -10,6 +11,7 @@
             margin-top: 10px;
             position: relative;
         }
+
         .box-label {
             position: absolute;
             display: none;
@@ -21,204 +23,226 @@
         }
     </style>
 </head>
+
 <body>
 
-<h1>Store Layout Mapper</h1>
-<input type="file" id="imageUpload" accept="image/*">
-<label for="threshold">Adjust Threshold:</label>
-<input type="range" id="threshold" min="50" max="200" value="150">
-<label for="toggleImage">Show Image</label>
-<input type="checkbox" id="toggleImage" checked>
-<canvas id="canvas" width="640" height="480"></canvas>
-<input type="text" id="boxLabel" class="box-label" placeholder="Enter shelf name">
+    <h1>Store Layout Mapper</h1>
+    <input type="file" id="imageUpload" accept="image/*">
+    <label for="threshold">Adjust Threshold:</label>
+    <input type="range" id="threshold" min="50" max="200" value="150">
+    <label for="toggleImage">Show Image</label>
+    <input type="checkbox" id="toggleImage" checked>
+    <canvas id="canvas" width="640" height="480"></canvas>
+    <input type="text" id="boxLabel" class="box-label" placeholder="Enter shelf name">
 
-<!-- OpenCV.js library -->
-<script src="https://docs.opencv.org/4.x/opencv.js" type="text/javascript"></script>
-<script>
-    const canvas = document.getElementById('canvas');
-    const context = canvas.getContext('2d');
-    const imageUpload = document.getElementById('imageUpload');
-    const thresholdInput = document.getElementById('threshold');
-    const boxLabelInput = document.getElementById('boxLabel');
-    const toggleImageCheckbox = document.getElementById('toggleImage');
+    <!-- OpenCV.js library -->
+    <script src="https://docs.opencv.org/4.x/opencv.js" type="text/javascript"></script>
+    <script>
+        const canvas = document.getElementById('canvas');
+        const context = canvas.getContext('2d');
+        const imageUpload = document.getElementById('imageUpload');
+        const thresholdInput = document.getElementById('threshold');
+        const boxLabelInput = document.getElementById('boxLabel');
+        const toggleImageCheckbox = document.getElementById('toggleImage');
 
-    let srcImage;
-    let detectedBoxes = [];
-    let activeBox = null;
-    let dragCorner = null;
+        let srcImage;
+        let detectedBoxes = [];
+        let activeBox = null;
+        let dragCorner = null;
+        let isDraggingBox = false;
+        let offsetX = 0;
+        let offsetY = 0;
 
-    imageUpload.addEventListener('change', (event) => {
-        const file = event.target.files[0];
-        if (file) {
-            const img = new Image();
-            img.onload = () => {
-                canvas.width = img.width;
-                canvas.height = img.height;
-                context.drawImage(img, 0, 0, img.width, img.height);
-                
-                srcImage = cv.imread(canvas);
-                detectShapes();
-            };
-            img.src = URL.createObjectURL(file);
-        }
-    });
+        imageUpload.addEventListener('change', (event) => {
+            const file = event.target.files[0];
+            if (file) {
+                const img = new Image();
+                img.onload = () => {
+                    canvas.width = img.width;
+                    canvas.height = img.height;
+                    context.drawImage(img, 0, 0, img.width, img.height);
 
-    thresholdInput.addEventListener('input', detectShapes);
-    toggleImageCheckbox.addEventListener('change', drawBoxes);
-
-    function detectShapes() {
-        if (!srcImage) return;
-
-        const src = srcImage.clone();
-        const gray = new cv.Mat();
-        const edges = new cv.Mat();
-
-        cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
-
-        const thresholdValue = parseInt(thresholdInput.value, 10);
-        cv.Canny(gray, edges, thresholdValue, thresholdValue * 2);
-
-        const contours = new cv.MatVector();
-        const hierarchy = new cv.Mat();
-        cv.findContours(edges, contours, hierarchy, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
-
-        context.clearRect(0, 0, canvas.width, canvas.height);
-        cv.imshow(canvas, srcImage);
-        detectedBoxes = [];
-
-        for (let i = 0; i < contours.size(); i++) {
-            const contour = contours.get(i);
-            const area = cv.contourArea(contour);
-
-            if (area > 500) {
-                const approx = new cv.Mat();
-                cv.approxPolyDP(contour, approx, 0.02 * cv.arcLength(contour, true), true);
-
-                if (approx.rows === 4) {
-                    const rect = cv.boundingRect(approx);
-                    detectedBoxes.push({ x: rect.x, y: rect.y, width: rect.width, height: rect.height, label: '' });
-                    context.strokeStyle = 'red';
-                    context.lineWidth = 2;
-                    context.strokeRect(rect.x, rect.y, rect.width, rect.height);
-                }
-                approx.delete();
-            }
-        }
-
-        src.delete(); gray.delete(); edges.delete(); contours.delete(); hierarchy.delete();
-        drawBoxes();
-    }
-
-    function drawBoxes() {
-        context.clearRect(0, 0, canvas.width, canvas.height);
-
-        // Only show the image if the checkbox is checked
-        if (toggleImageCheckbox.checked && srcImage) {
-            cv.imshow(canvas, srcImage);
-        }
-
-        detectedBoxes.forEach(box => {
-            context.strokeStyle = (box === activeBox) ? 'green' : 'blue';
-            context.lineWidth = 2;
-            context.strokeRect(box.x, box.y, box.width, box.height);
-
-            // Draw label text in the box
-            context.fillStyle = 'black';
-            context.font = '12px Arial';
-            context.fillText(box.label, box.x + 5, box.y + 15);
-
-            // Draw corner handles if the box is active
-            if (box === activeBox) {
-                drawCornerHandles(box);
+                    srcImage = cv.imread(canvas);
+                    detectShapes();
+                };
+                img.src = URL.createObjectURL(file);
             }
         });
-    }
 
-    function drawCornerHandles(box) {
-        const handleSize = 8;
-        context.fillStyle = 'green';
-        context.fillRect(box.x - handleSize / 2, box.y - handleSize / 2, handleSize, handleSize); // Top-left
-        context.fillRect(box.x + box.width - handleSize / 2, box.y - handleSize / 2, handleSize, handleSize); // Top-right
-        context.fillRect(box.x - handleSize / 2, box.y + box.height - handleSize / 2, handleSize, handleSize); // Bottom-left
-        context.fillRect(box.x + box.width - handleSize / 2, box.y + box.height - handleSize / 2, handleSize, handleSize); // Bottom-right
-    }
+        thresholdInput.addEventListener('input', detectShapes);
+        toggleImageCheckbox.addEventListener('change', drawBoxes);
 
-    function getCornerUnderCursor(x, y, box) {
-        const handleSize = 8;
-        if (Math.abs(x - box.x) < handleSize && Math.abs(y - box.y) < handleSize) return 'top-left';
-        if (Math.abs(x - (box.x + box.width)) < handleSize && Math.abs(y - box.y) < handleSize) return 'top-right';
-        if (Math.abs(x - box.x) < handleSize && Math.abs(y - (box.y + box.height)) < handleSize) return 'bottom-left';
-        if (Math.abs(x - (box.x + box.width)) < handleSize && Math.abs(y - (box.y + box.height)) < handleSize) return 'bottom-right';
-        return null;
-    }
+        function detectShapes() {
+            if (!srcImage) return;
 
-    canvas.addEventListener('mousedown', (event) => {
-        const { offsetX: x, offsetY: y } = event;
+            const src = srcImage.clone();
+            const gray = new cv.Mat();
+            const edges = new cv.Mat();
 
-        const clickedBox = detectedBoxes.find(box => (
-            x >= box.x && x <= box.x + box.width &&
-            y >= box.y && y <= box.y + box.height
-        ));
+            cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
 
-        if (clickedBox) {
-            activeBox = clickedBox;
-            dragCorner = getCornerUnderCursor(x, y, activeBox);
+            const thresholdValue = parseInt(thresholdInput.value, 10);
+            cv.Canny(gray, edges, thresholdValue, thresholdValue * 2);
 
-            // Display text input for editing the label in editor mode with offset
-            boxLabelInput.style.left = `${activeBox.x + canvas.offsetLeft + 4}px`;
-            boxLabelInput.style.top = `${activeBox.y + canvas.offsetTop + 4}px`;
-            boxLabelInput.style.width = `${activeBox.width - 10}px`;
-            boxLabelInput.value = activeBox.label;
-            boxLabelInput.style.display = 'block';
-            boxLabelInput.focus();
+            const contours = new cv.MatVector();
+            const hierarchy = new cv.Mat();
+            cv.findContours(edges, contours, hierarchy, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
 
-            drawBoxes();
-        } else {
-            // If click is outside any box, hide the label input and deactivate activeBox
-            activeBox = null;
-            boxLabelInput.style.display = 'none';
+            context.clearRect(0, 0, canvas.width, canvas.height);
+            cv.imshow(canvas, srcImage);
+            detectedBoxes = [];
+
+            for (let i = 0; i < contours.size(); i++) {
+                const contour = contours.get(i);
+                const area = cv.contourArea(contour);
+
+                if (area > 500) {
+                    const approx = new cv.Mat();
+                    cv.approxPolyDP(contour, approx, 0.02 * cv.arcLength(contour, true), true);
+
+                    if (approx.rows === 4) {
+                        const rect = cv.boundingRect(approx);
+                        detectedBoxes.push({ x: rect.x, y: rect.y, width: rect.width, height: rect.height, label: '' });
+                        context.strokeStyle = 'red';
+                        context.lineWidth = 2;
+                        context.strokeRect(rect.x, rect.y, rect.width, rect.height);
+                    }
+                    approx.delete();
+                }
+            }
+
+            src.delete(); gray.delete(); edges.delete(); contours.delete(); hierarchy.delete();
             drawBoxes();
         }
-    });
 
-    canvas.addEventListener('mousemove', (event) => {
-        if (!activeBox || !dragCorner) return;
+        function drawBoxes() {
+            context.clearRect(0, 0, canvas.width, canvas.height);
 
-        const { offsetX: x, offsetY: y } = event;
+            // Only show the image if the checkbox is checked
+            if (toggleImageCheckbox.checked && srcImage) {
+                cv.imshow(canvas, srcImage);
+            }
 
-        if (dragCorner === 'top-left') {
-            activeBox.width += activeBox.x - x;
-            activeBox.height += activeBox.y - y;
-            activeBox.x = x;
-            activeBox.y = y;
-        } else if (dragCorner === 'top-right') {
-            activeBox.width = x - activeBox.x;
-            activeBox.height += activeBox.y - y;
-            activeBox.y = y;
-        } else if (dragCorner === 'bottom-left') {
-            activeBox.width += activeBox.x - x;
-            activeBox.x = x;
-            activeBox.height = y - activeBox.y;
-        } else if (dragCorner === 'bottom-right') {
-            activeBox.width = x - activeBox.x;
-            activeBox.height = y - activeBox.y;
+            detectedBoxes.forEach(box => {
+                context.strokeStyle = (box === activeBox) ? 'green' : 'blue';
+                context.lineWidth = 2;
+                context.strokeRect(box.x, box.y, box.width, box.height);
+
+                // Draw label text in the box
+                context.fillStyle = 'black';
+                context.font = '12px Arial';
+                context.fillText(box.label, box.x + 5, box.y + 15);
+
+                // Draw corner handles if the box is active
+                if (box === activeBox) {
+                    drawCornerHandles(box);
+                }
+            });
         }
 
-        // Update the text box position to follow the top-left corner with offset
-        boxLabelInput.style.left = `${activeBox.x + canvas.offsetLeft + 4}px`;
-        boxLabelInput.style.top = `${activeBox.y + canvas.offsetTop + 4}px`;
+        function drawCornerHandles(box) {
+            const handleSize = 8;
+            context.fillStyle = 'green';
+            context.fillRect(box.x - handleSize / 2, box.y - handleSize / 2, handleSize, handleSize); // Top-left
+            context.fillRect(box.x + box.width - handleSize / 2, box.y - handleSize / 2, handleSize, handleSize); // Top-right
+            context.fillRect(box.x - handleSize / 2, box.y + box.height - handleSize / 2, handleSize, handleSize); // Bottom-left
+            context.fillRect(box.x + box.width - handleSize / 2, box.y + box.height - handleSize / 2, handleSize, handleSize); // Bottom-right
+        }
 
-        drawBoxes();
-    });
+        function getCornerUnderCursor(x, y, box) {
+            const handleSize = 8;
+            if (Math.abs(x - box.x) < handleSize && Math.abs(y - box.y) < handleSize) return 'top-left';
+            if (Math.abs(x - (box.x + box.width)) < handleSize && Math.abs(y - box.y) < handleSize) return 'top-right';
+            if (Math.abs(x - box.x) < handleSize && Math.abs(y - (box.y + box.height)) < handleSize) return 'bottom-left';
+            if (Math.abs(x - (box.x + box.width)) < handleSize && Math.abs(y - (box.y + box.height)) < handleSize) return 'bottom-right';
+            return null;
+        }
 
-    canvas.addEventListener('mouseup', () => {
-        dragCorner = null;
-    });
+        canvas.addEventListener('mousedown', (event) => {
+            const { offsetX: x, offsetY: y } = event;
 
-    boxLabelInput.addEventListener('input', () => {
-        if (activeBox) activeBox.label = boxLabelInput.value;
-    });
-</script>
+            const clickedBox = detectedBoxes.find(box => (
+                x >= box.x && x <= box.x + box.width &&
+                y >= box.y && y <= box.y + box.height
+            ));
+
+            if (clickedBox) {
+                activeBox = clickedBox;
+                dragCorner = getCornerUnderCursor(x, y, activeBox);
+
+                if (!dragCorner) {
+                    isDraggingBox = true;
+                    offsetX = x - activeBox.x;
+                    offsetY = y - activeBox.y;
+                }
+
+                // Display text input for editing the label in editor mode with offset
+                boxLabelInput.style.left = `${activeBox.x + canvas.offsetLeft + 4}px`;
+                boxLabelInput.style.top = `${activeBox.y + canvas.offsetTop + 4}px`;
+                boxLabelInput.style.width = `${activeBox.width - 10}px`;
+                boxLabelInput.value = activeBox.label;
+                boxLabelInput.style.display = 'block';
+                boxLabelInput.focus();
+
+                drawBoxes();
+            } else {
+                // If click is outside any box, hide the label input and deactivate activeBox
+                activeBox = null;
+                boxLabelInput.style.display = 'none';
+                drawBoxes();
+            }
+        });
+
+        canvas.addEventListener('mousemove', (event) => {
+            if (!activeBox) return;
+
+            const { offsetX: x, offsetY: y } = event;
+
+            // Handle box resizing
+            if (dragCorner) {
+                if (dragCorner === 'top-left') {
+                    activeBox.width += activeBox.x - x;
+                    activeBox.height += activeBox.y - y;
+                    activeBox.x = x;
+                    activeBox.y = y;
+                } else if (dragCorner === 'top-right') {
+                    activeBox.width = x - activeBox.x;
+                    activeBox.height += activeBox.y - y;
+                    activeBox.y = y;
+                } else if (dragCorner === 'bottom-left') {
+                    activeBox.width += activeBox.x - x;
+                    activeBox.x = x;
+                    activeBox.height = y - activeBox.y;
+                } else if (dragCorner === 'bottom-right') {
+                    activeBox.width = x - activeBox.x;
+                    activeBox.height = y - activeBox.y;
+                }
+                // Update the text box position to follow the top-left corner with offset
+                boxLabelInput.style.left = `${activeBox.x + canvas.offsetLeft + 4}px`;
+                boxLabelInput.style.top = `${activeBox.y + canvas.offsetTop + 4}px`;
+
+                // Handle box dragging
+            } else if (isDraggingBox) {
+                activeBox.x = x - offsetX;
+                activeBox.y = y - offsetY;
+
+                // Update the text box position to follow the top-left corner with offset
+                boxLabelInput.style.left = `${activeBox.x + canvas.offsetLeft + 4}px`;
+                boxLabelInput.style.top = `${activeBox.y + canvas.offsetTop + 4}px`;
+            }
+            drawBoxes();
+        });
+
+        canvas.addEventListener('mouseup', () => {
+            dragCorner = null;
+            isDraggingBox = false;
+        });
+
+        boxLabelInput.addEventListener('input', () => {
+            if (activeBox) activeBox.label = boxLabelInput.value;
+        });
+    </script>
 
 </body>
+
 </html>
