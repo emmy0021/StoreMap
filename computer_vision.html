@@ -161,37 +161,58 @@
         canvas.addEventListener('mousedown', (event) => {
             const { offsetX: x, offsetY: y } = event;
 
+            // Check if we're clicking on an existing box
             const clickedBox = detectedBoxes.find(box => (
                 x >= box.x && x <= box.x + box.width &&
                 y >= box.y && y <= box.y + box.height
             ));
 
             if (clickedBox) {
-                activeBox = clickedBox;
-                dragCorner = getCornerUnderCursor(x, y, activeBox);
+                // Check if we are clicking on a resize corner
+                dragCorner = getCornerUnderCursor(x, y, clickedBox);
 
-                if (!dragCorner) {
-                    isDraggingBox = true;
-                    offsetX = x - activeBox.x;
-                    offsetY = y - activeBox.y;
-                }
-
-                // Display text input for editing the label in editor mode with offset
-                boxLabelInput.style.left = `${activeBox.x + canvas.offsetLeft + 4}px`;
-                boxLabelInput.style.top = `${activeBox.y + canvas.offsetTop + 4}px`;
-                boxLabelInput.style.width = `${activeBox.width - 10}px`;
-                boxLabelInput.value = activeBox.label;
+                // Temporarily show the box label input to get its dimensions
                 boxLabelInput.style.display = 'block';
-                boxLabelInput.focus();
+                const labelWidth = boxLabelInput.offsetWidth;
+                const labelHeight = boxLabelInput.offsetHeight;
+
+                // Calculate the label input's position
+                const labelX = clickedBox.x + 4; // Only add a small padding for label positioning
+                const labelY = clickedBox.y + 4; // Only add a small padding for label positioning
+                const isInLabelArea = (
+                    x >= labelX && x <= labelX + labelWidth &&
+                    y >= labelY && y <= labelY + labelHeight
+                );
+
+                // Only start dragging if click is neither on resize corner nor in label area
+                if (!dragCorner) {
+                    activeBox = clickedBox;
+
+                    if (!isInLabelArea) {
+                        isDraggingBox = true;
+                        offsetX = x - activeBox.x;
+                        offsetY = y - activeBox.y;
+                    }
+
+                    // Display text input for editing the label
+                    boxLabelInput.style.left = `${activeBox.x + canvas.offsetLeft + 4}px`;
+                    boxLabelInput.style.top = `${activeBox.y + canvas.offsetTop + 4}px`;
+                    boxLabelInput.style.width = `${activeBox.width - 10}px`;
+                    boxLabelInput.value = activeBox.label;
+                    boxLabelInput.style.display = 'block';
+                    boxLabelInput.focus();
+                }
 
                 drawBoxes();
             } else {
-                // If click is outside any box, hide the label input and deactivate activeBox
+                // Deselect box if clicking outside of any box
                 activeBox = null;
                 boxLabelInput.style.display = 'none';
                 drawBoxes();
             }
         });
+
+
 
         canvas.addEventListener('mousemove', (event) => {
             if (!activeBox) return;
@@ -237,6 +258,18 @@
             dragCorner = null;
             isDraggingBox = false;
         });
+
+        document.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape') {
+                // Deselect any active box and hide the label input
+                activeBox = null;
+                dragCorner = null;
+                isDraggingBox = false;
+                boxLabelInput.style.display = 'none';
+                drawBoxes();
+            }
+        });
+
 
         boxLabelInput.addEventListener('input', () => {
             if (activeBox) activeBox.label = boxLabelInput.value;
