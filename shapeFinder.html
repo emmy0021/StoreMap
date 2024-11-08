@@ -51,7 +51,40 @@
                     "white/light": 0
                 };
 
+                // Loop through each pixel
+                for (let y = 0; y < imageHeight; y++) {
+                    for (let x = 0; x < imageWidth; x += scanWidth) {
+
+                        const i = (y * imageWidth + x) * 4;
+
+                        const red = pixels[i];
+                        const green = pixels[i + 1];
+                        const blue = pixels[i + 2];
+                        const alpha = pixels[i + 3];
+
+                        // Skip fully transparent pixels
+                        if (alpha === 0) continue;
+
+                        // Calculate brightness
+                        const brightness = 0.299 * red + 0.587 * green + 0.114 * blue;
+
+                        // Categorize based on brightness
+                        if (brightness <= 150) {
+                            categories["black/dark"]++;
+                        } else {
+                            categories["white/light"]++;
+                        }
+                    }
+
+                }
+
+                // Log the results
+                for (const [category, count] of Object.entries(categories)) {
+                    console.log(`${category}: ${count} pixels`);
+                }
+
                 const brightPink = [255, 105, 180, 255];
+
 
                 let duration = parseFloat(durationTime);
                 let totalPixels = imageWidth * imageHeight;
@@ -67,13 +100,13 @@
                     const green = pixels[i + 1];
                     const blue = pixels[i + 2];
                     const alpha = pixels[i + 3];
-
+ 
                     // Skip fully transparent pixels
                     if (alpha === 0) continue;
-
+ 
                     // Calculate brightness
                     const brightness = 0.299 * red + 0.587 * green + 0.114 * blue;
-
+ 
                     // Determine category and assign new color
                     let newColor;
                     if (brightness <= 50) {
@@ -87,13 +120,26 @@
                     } else {
                         newColor = colorMap["white/light"];
                     }
-
+ 
                     // Apply new color to pixel
                     pixels[i] = newColor[0];     // Red
                     pixels[i + 1] = newColor[1]; // Green
                     pixels[i + 2] = newColor[2]; // Blue
                 }
                 */
+
+
+                function shapeDetected(x, y, pixels) {
+                    const blue = [0, 0, 255, 255];
+
+                    index = (y * imageWidth + x) * 4;
+
+                    pixels[index] = blue[0];     // Red
+                    pixels[index + 1] = blue[1]; // Green
+                    pixels[index + 2] = blue[2]; // Blue
+                    pixels[index + 3] = blue[3];
+                }
+
                 function animate(timestamp) {
                     if (!startTime) startTime = timestamp;
 
@@ -112,16 +158,19 @@
 
                             index = (y * imageWidth + x) * 4;
 
+                            const red = pixels[index];
+                            const green = pixels[index + 1];
+                            const blue = pixels[index + 2];
+                            const alpha = pixels[index + 3];
+
+
                             pixels[index] = brightPink[0];     // Red
                             pixels[index + 1] = brightPink[1]; // Green
                             pixels[index + 2] = brightPink[2]; // Blue
                             pixels[index + 3] = brightPink[3]; // Blue
                             pixelsProcessed++;
 
-                            const red = pixels[index];
-                            const green = pixels[index + 1];
-                            const blue = pixels[index + 2];
-                            const alpha = pixels[index + 3];
+
 
                             // Skip fully transparent pixels
                             if (alpha === 0) continue;
@@ -130,21 +179,12 @@
                             const brightness = 0.299 * red + 0.587 * green + 0.114 * blue;
 
                             // Determine category and assign new color
-                            let newColor;
-                            if (brightness <= 50) {
-                                newColor = colorMap["black/dark"];
+                            if (brightness <= 150) {
+                                //shape is detected
                                 categories["black/dark"]++;
-                            } else if (brightness <= 100) {
-                                newColor = colorMap["dark gray"];
-                                categories["black/dark"]++;
-                            } else if (brightness <= 150) {
-                                newColor = colorMap["gray"];
-                                categories["black/dark"]++;
-                            } else if (brightness <= 200) {
-                                newColor = colorMap["light gray"];
-                                categories["white/light"]++;
+
+                                shapeDetected(x, y, pixels)
                             } else {
-                                newColor = colorMap["white/light"];
                                 categories["white/light"]++;
                             }
 
@@ -160,14 +200,15 @@
                         requestAnimationFrame(animate);
                     }
 
-                    for (const [category, count] of Object.entries(categories)) {
-                        console.log(`${category}: ${count} pixels`);
-                    }
+
                 }
 
                 // Start the animation
                 requestAnimationFrame(animate);
+
             };
+
+
         });
     </script>
 </body>
