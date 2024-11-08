@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Brightness Categorization Visualization</title>
+</head>
+
+<body>
+    <input type="file" id="imageUpload" accept="image/*">
+    <canvas id="canvas"></canvas>
+    <script>
+
+        const scanWidth = 5;
+        let durationTime = 25;
+
+        const imageUpload = document.getElementById('imageUpload');
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+
+        imageUpload.addEventListener('change', (event) => {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const img = new Image();
+            img.src = URL.createObjectURL(file);
+
+            img.onload = () => {
+                const imageWidth = img.width;
+                const imageHeight = img.height;
+                canvas.width = imageWidth;
+                canvas.height = imageHeight;
+
+                ctx.drawImage(img, 0, 0);
+
+                const imageData = ctx.getImageData(0, 0, img.width, img.height);
+                const pixels = imageData.data;
+
+                // Define replacement colors for each category
+                const colorMap = {
+                    "black/dark": [255, 0, 255],    // Bright Pink
+                    "dark gray": [255, 0, 0],       // Red
+                    "gray": [255, 255, 0],          // Yellow
+                    "light gray": [0, 0, 255],      // Blue
+                    "white/light": [0, 255, 0]      // Bright Green
+                };
+
+                const categories = {
+                    "black/dark": 0,
+                    "white/light": 0
+                };
+
+                const brightPink = [255, 105, 180, 255];
+
+                let duration = parseFloat(durationTime);
+                let totalPixels = imageWidth * imageHeight;
+                let pixelsChanged = 0;
+
+                // Track time elapsed
+                let startTime = null;
+
+                /*
+                // Loop through each pixel and modify color based on brightness category
+                for (let i = 0; i < pixels.length; i += 4) {
+                    const red = pixels[i];
+                    const green = pixels[i + 1];
+                    const blue = pixels[i + 2];
+                    const alpha = pixels[i + 3];
+
+                    // Skip fully transparent pixels
+                    if (alpha === 0) continue;
+
+                    // Calculate brightness
+                    const brightness = 0.299 * red + 0.587 * green + 0.114 * blue;
+
+                    // Determine category and assign new color
+                    let newColor;
+                    if (brightness <= 50) {
+                        newColor = colorMap["black/dark"];
+                    } else if (brightness <= 100) {
+                        newColor = colorMap["dark gray"];
+                    } else if (brightness <= 150) {
+                        newColor = colorMap["gray"];
+                    } else if (brightness <= 200) {
+                        newColor = colorMap["light gray"];
+                    } else {
+                        newColor = colorMap["white/light"];
+                    }
+
+                    // Apply new color to pixel
+                    pixels[i] = newColor[0];     // Red
+                    pixels[i + 1] = newColor[1]; // Green
+                    pixels[i + 2] = newColor[2]; // Blue
+                }
+                */
+                function animate(timestamp) {
+                    if (!startTime) startTime = timestamp;
+
+                    // Calculate how much time has passed (in seconds)
+                    const elapsedTime = (timestamp - startTime) / 1000;
+
+                    // Calculate how many pixels should be changed based on time and duration
+                    const pixelsToChange = Math.min(totalPixels, Math.floor((elapsedTime / duration) * totalPixels));
+
+                    let pixelsProcessed = 0;
+
+                    // Update the pixels up to the calculated amount
+                    for (let x = 0; x < imageWidth; x += scanWidth) {
+                        for (let y = 0; y < imageHeight; y++) {
+                            if (pixelsProcessed >= pixelsToChange) break;
+
+                            index = (y * imageWidth + x) * 4;
+
+                            pixels[index] = brightPink[0];     // Red
+                            pixels[index + 1] = brightPink[1]; // Green
+                            pixels[index + 2] = brightPink[2]; // Blue
+                            pixels[index + 3] = brightPink[3]; // Blue
+                            pixelsProcessed++;
+
+                            const red = pixels[index];
+                            const green = pixels[index + 1];
+                            const blue = pixels[index + 2];
+                            const alpha = pixels[index + 3];
+
+                            // Skip fully transparent pixels
+                            if (alpha === 0) continue;
+
+                            // Calculate brightness
+                            const brightness = 0.299 * red + 0.587 * green + 0.114 * blue;
+
+                            // Determine category and assign new color
+                            let newColor;
+                            if (brightness <= 50) {
+                                newColor = colorMap["black/dark"];
+                                categories["black/dark"]++;
+                            } else if (brightness <= 100) {
+                                newColor = colorMap["dark gray"];
+                                categories["black/dark"]++;
+                            } else if (brightness <= 150) {
+                                newColor = colorMap["gray"];
+                                categories["black/dark"]++;
+                            } else if (brightness <= 200) {
+                                newColor = colorMap["light gray"];
+                                categories["white/light"]++;
+                            } else {
+                                newColor = colorMap["white/light"];
+                                categories["white/light"]++;
+                            }
+
+                        }
+                    }
+
+
+                    // Update the canvas with modified image data
+                    ctx.putImageData(imageData, 0, 0);
+
+                    // Continue the animation until all pixels are changed
+                    if (pixelsChanged < totalPixels && elapsedTime < duration) {
+                        requestAnimationFrame(animate);
+                    }
+
+                    for (const [category, count] of Object.entries(categories)) {
+                        console.log(`${category}: ${count} pixels`);
+                    }
+                }
+
+                // Start the animation
+                requestAnimationFrame(animate);
+            };
+        });
+    </script>
+</body>
+
+</html>
