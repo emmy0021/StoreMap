@@ -18,6 +18,27 @@
         const imageUpload = document.getElementById('imageUpload');
         const canvas = document.getElementById('canvas');
         const ctx = canvas.getContext('2d');
+        let boxes = [];
+
+        function isOverlapping(x, y) {
+
+            if (boxes.length == 0) {
+                return false
+            }
+
+            return boxes.some(box => {
+                return !(
+                    x <= box.x ||
+                    x >= box.x ||
+                    y <= box.y ||
+                    y >= box.y
+                );
+            });
+        }
+
+        function getPixelArrayIndex(x, y, imageWidth) {
+            return (y * imageWidth + x) * 4;
+        }
 
         imageUpload.addEventListener('change', (event) => {
             const file = event.target.files[0];
@@ -55,7 +76,7 @@
                 for (let y = 0; y < imageHeight; y++) {
                     for (let x = 0; x < imageWidth; x += scanWidth) {
 
-                        const i = (y * imageWidth + x) * 4;
+                        const i = getPixelArrayIndex(x, y, imageWidth);
 
                         const red = pixels[i];
                         const green = pixels[i + 1];
@@ -90,121 +111,176 @@
                 let totalPixels = imageWidth * imageHeight;
                 let pixelsChanged = 0;
 
-                // Track time elapsed
-                let startTime = null;
 
-                /*
-                // Loop through each pixel and modify color based on brightness category
-                for (let i = 0; i < pixels.length; i += 4) {
-                    const red = pixels[i];
-                    const green = pixels[i + 1];
-                    const blue = pixels[i + 2];
-                    const alpha = pixels[i + 3];
- 
+                function getRGBA(pixels, index) {
+                    var red = pixels[index];
+                    var green = pixels[index + 1];
+                    var blue = pixels[index + 2];
+                    var alpha = pixels[index + 3];
+
+                    return { red, green, blue, alpha }
+                }
+
+                function isColorBlack(red, green, blue, alpha) {
                     // Skip fully transparent pixels
-                    if (alpha === 0) continue;
- 
+                    if (alpha === 0) return false;
+
                     // Calculate brightness
                     const brightness = 0.299 * red + 0.587 * green + 0.114 * blue;
- 
+
                     // Determine category and assign new color
-                    let newColor;
-                    if (brightness <= 50) {
-                        newColor = colorMap["black/dark"];
-                    } else if (brightness <= 100) {
-                        newColor = colorMap["dark gray"];
-                    } else if (brightness <= 150) {
-                        newColor = colorMap["gray"];
-                    } else if (brightness <= 200) {
-                        newColor = colorMap["light gray"];
-                    } else {
-                        newColor = colorMap["white/light"];
+                    return brightness <= 150;
+                }
+
+                function getNewXAndY(x, y, direction) {
+                    newX = x + direction.x;
+                    newY = y + direction.y;
+                    return { newX, newY }
+                }
+                function isWithinBounds(newX, newY, maxWidth, maxHeigth, newBox) {
+
+                    if (newX < 0 || newX > maxWidth || newY < 0 || newY > maxHeigth) { // this "box" is an edge box so we dont consider those valide boxes
+                        newBox.isValid = false
+                        return false
                     }
- 
-                    // Apply new color to pixel
-                    pixels[i] = newColor[0];     // Red
-                    pixels[i + 1] = newColor[1]; // Green
-                    pixels[i + 2] = newColor[2]; // Blue
-                }
-                */
 
+                    return true
 
-                function shapeDetected(x, y, pixels) {
-                    const blue = [0, 0, 255, 255];
-
-                    index = (y * imageWidth + x) * 4;
-
-                    pixels[index] = blue[0];     // Red
-                    pixels[index + 1] = blue[1]; // Green
-                    pixels[index + 2] = blue[2]; // Blue
-                    pixels[index + 3] = blue[3];
                 }
 
-                function animate(timestamp) {
-                    if (!startTime) startTime = timestamp;
-
-                    // Calculate how much time has passed (in seconds)
-                    const elapsedTime = (timestamp - startTime) / 1000;
-
-                    // Calculate how many pixels should be changed based on time and duration
-                    const pixelsToChange = Math.min(totalPixels, Math.floor((elapsedTime / duration) * totalPixels));
-
-                    let pixelsProcessed = 0;
-
-                    // Update the pixels up to the calculated amount
-                    for (let x = 0; x < imageWidth; x += scanWidth) {
-                        for (let y = 0; y < imageHeight; y++) {
-                            if (pixelsProcessed >= pixelsToChange) break;
-
-                            index = (y * imageWidth + x) * 4;
-
-                            const red = pixels[index];
-                            const green = pixels[index + 1];
-                            const blue = pixels[index + 2];
-                            const alpha = pixels[index + 3];
+                function shapeDetected(x, y, maxWidth, maxHeigth, pixels, newBox, pixelsProcessed) {
 
 
-                            pixels[index] = brightPink[0];     // Red
-                            pixels[index + 1] = brightPink[1]; // Green
-                            pixels[index + 2] = brightPink[2]; // Blue
-                            pixels[index + 3] = brightPink[3]; // Blue
-                            pixelsProcessed++;
+                    const blueColor = [0, 0, 255, 255];
+
+                    index = getPixelArrayIndex(x, y, imageWidth);
+
+                    pixels[index] = blueColor[0];     // Red
+                    pixels[index + 1] = blueColor[1]; // Green
+                    pixels[index + 2] = blueColor[2]; // Blue
+                    pixels[index + 3] = blueColor[3];
+
+                    const colorMap = {
+                        "left": { x: -1, y: 0 },
+                        "right": { x: 1, y: 0 },
+                        "up": { x: 0, y: 1 },
+                        "down": { x: 0, y: -1 }
+                    };
+
+                    direction = "left";
+
+                    directionsChecked = 0;
 
 
+                    //shapeDetected(x, y, maxWidth, maxHeigth, pixels, newBox)
+                    currentX = x;
+                    currentY = y;
 
-                            // Skip fully transparent pixels
-                            if (alpha === 0) continue;
+                    while (pixelsProcessed < maxHeigth * maxWidth) {
+                        let { newX, newY } = getNewXAndY(currentX, currentY, colorMap[direction]);
+                        newIndex = getPixelArrayIndex(newX, newY, imageWidth);
 
-                            // Calculate brightness
-                            const brightness = 0.299 * red + 0.587 * green + 0.114 * blue;
+                        const { red, green, blue, alpha } = getRGBA(pixels, newIndex);
+                        directionsChecked++;
 
-                            // Determine category and assign new color
-                            if (brightness <= 150) {
-                                //shape is detected
-                                categories["black/dark"]++;
+                        //if pixel to the left is within bounds and is black, go left
+                        if (isWithinBounds(newX, newY, maxWidth, maxHeigth, newBox)) {
+                            if (isColorBlack(red, green, blue, alpha)) {
+                                pixels[newIndex] = blueColor[0];     // Red
+                                pixels[newIndex + 1] = blueColor[1]; // Green
+                                pixels[newIndex + 2] = blueColor[2]; // Blue
+                                pixels[newIndex + 3] = blueColor[3];
 
-                                shapeDetected(x, y, pixels)
+                                pixelsProcessed++;
+                                directionsChecked = 0;
+                                direction = "left";
+                                currentX = newX;
+                                currentY = newY;
                             } else {
-                                categories["white/light"]++;
+                                if (directionsChecked < 5) {
+                                    switch (direction) {
+                                        case "left":
+                                            direction = "down";
+                                            break;
+                                        case "down":
+                                            direction = "right";
+                                            break;
+                                        case "right":
+                                            direction = "up";
+                                            break;
+                                        case "up":
+                                            direction = "left";
+                                            break;
+                                    }
+                                } else {
+                                    break;
+                                }
+
+                            }
+                        } else {
+                            break
+                        }
+
+
+                    }
+
+
+
+                }
+
+
+
+                // Calculate how many pixels should be changed based on time and duration
+                const pixelsToChange = imageWidth * imageHeight;
+
+                let pixelsProcessed = 0;
+
+                // Update the pixels up to the calculated amount
+                for (let x = 0; x < imageWidth; x += scanWidth) {
+                    for (let y = 0; y < imageHeight; y++) {
+                        if (pixelsProcessed >= pixelsToChange) break;
+
+                        index = getPixelArrayIndex(x, y, imageWidth);
+
+                        const { red, green, blue, alpha } = getRGBA(pixels, index);
+
+
+
+                        pixels[index] = brightPink[0];     // Red
+                        pixels[index + 1] = brightPink[1]; // Green
+                        pixels[index + 2] = brightPink[2]; // Blue
+                        pixels[index + 3] = brightPink[3]; // Blue
+                        pixelsProcessed++;
+
+                        // Determine category and assign new color
+                        if (isColorBlack(red, green, blue, alpha)) {
+                            //"black/dark" shape is detected
+
+                            //console.log(!isOverlapping(x,y))
+                            if (!isOverlapping(x, y)) {
+                                const newBox = {
+                                    minX: x,
+                                    maxX: x,
+                                    minY: y,
+                                    maxY: y,
+                                    label: '',
+                                    isValid: true
+                                };
+                                shapeDetected(x, y, imageWidth, imageHeight, pixels, newBox, pixelsProcessed)
+                                //boxes.push(newBox)
                             }
 
                         }
+
                     }
-
-
-                    // Update the canvas with modified image data
-                    ctx.putImageData(imageData, 0, 0);
-
-                    // Continue the animation until all pixels are changed
-                    if (pixelsChanged < totalPixels && elapsedTime < duration) {
-                        requestAnimationFrame(animate);
-                    }
-
-
                 }
 
-                // Start the animation
-                requestAnimationFrame(animate);
+
+                // Update the canvas with modified image data
+                ctx.putImageData(imageData, 0, 0);
+
+
+
 
             };
 
